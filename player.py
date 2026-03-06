@@ -7,7 +7,7 @@ from typing import Optional
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from minicons import scorer
 
-from chess_exam.chess_tournament.players import Player
+from chess_tournament.players import Player
 
 class TransformerPlayer(Player):
     """
