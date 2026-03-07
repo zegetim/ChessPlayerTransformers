@@ -6,7 +6,7 @@ import numpy as np
 from typing import Optional
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-from chess_exam.chess_tournament.players import Player
+from chess_tournament.players import Player
 
 class TransformerPlayer(Player):
     """
