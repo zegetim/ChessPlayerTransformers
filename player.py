@@ -72,6 +72,19 @@ class TransformerPlayer(Player):
         board.push(move)
         return board.is_checkmate()
     
+    # check if move leads to checkmate for opponent
+    def checkmate_opponent(self, fen:str, move:str) -> bool:
+        board = chess.Board(fen)
+        board.push(chess.Move.from_uci(move))
+        moves = list(board.legal_moves)
+        for m in moves:
+            board.push(m)
+            if board.is_checkmate():
+                board.pop()
+                return True
+            board.pop()
+        return False
+                
     # check if position is attacked
     def attacked(self, fen:str, move: str) -> bool:
         board = chess.Board(fen)
@@ -81,26 +94,29 @@ class TransformerPlayer(Player):
             attacked = board.is_attacked_by(chess.WHITE, chess.parse_square(move[-2:]))
         return attacked
 
-    # check if cpature is available
+    # check if capture is available
     def capture(self, fen: str) -> list[str]:
         board = chess.Board(fen)
         moves = list(board.legal_moves)
 
         best_moves = []
         checkmate_moves = []
+        checkmate_opponent_moves = []
         
         for move in moves:
-            piecetype = board.piece_at(move.to_square)
             if self.checkmate_available(fen, move):
                 checkmate_moves.append(move.uci())
-            if board.is_capture(move):
-                if not self.attacked(fen, move.uci()):
-                    best_moves.append(move.uci())
+            if not self.checkmate_opponent(fen, move.uci()):
+                checkmate_opponent_moves.append(move.uci())
+                if board.is_capture(move):
+                    if not self.attacked(fen, move.uci()):
+                        best_moves.append(move.uci())
         if len(checkmate_moves) > 0:
             return checkmate_moves
-        elif len(best_moves) > 0:
+        if len(best_moves) > 0:
             return best_moves
-        # print("model wordt gebruikt")
+        if len(checkmate_opponent_moves) > 0:
+            return checkmate_opponent_moves
         return [move.uci() for move in moves]
     
     # model chooses move with highest 
@@ -126,7 +142,6 @@ class TransformerPlayer(Player):
     # -------------------------
     
     def get_move(self, fen: str) -> Optional[str]:
-        board = chess.Board(fen)
         try:
             capture_moves = self.capture(fen)
             if capture_moves:
