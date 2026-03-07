@@ -5,7 +5,6 @@ import torch
 import numpy as np
 from typing import Optional
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from minicons import scorer
 
 from chess_tournament.players import Player
 
