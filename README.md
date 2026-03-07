@@ -21,7 +21,7 @@ You MUST install the instructor package. In Colab:
 
 ```
 git clone https://github.com/bylinina/chess_exam.git
-cd chess-exam
+cd chess_exam
 pip install -e .
 ```
 
