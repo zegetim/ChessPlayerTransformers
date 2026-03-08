@@ -84,18 +84,32 @@ class TransformerPlayer(Player):
                 return True
             board.pop()
         return False
+    
+    # check for stalemate, threefold repetition or fifty moves without capture
+    def prevent_draw(self, fen: str, move: chess.Move) -> bool:
+        board = chess.Board(fen)
+        board.push(move)
+        if board.is_stalemate() or board.can_claim_threefold_repetition() or board.can_claim_fifty_moves() or board.is_insufficient_material():
+            board.pop()
+            return False
+        board.pop()
+        return True
                 
     # check if position is attacked
     def attacked(self, fen:str, move: str) -> bool:
         board = chess.Board(fen)
+
+        # if white to move, check if black is attacking
         if 'w' in fen:
             attacked = board.is_attacked_by(chess.BLACK, chess.parse_square(move[-2:]))
+
+        # if black to move, check if white is attacking
         else:
             attacked = board.is_attacked_by(chess.WHITE, chess.parse_square(move[-2:]))
         return attacked
 
     # check if capture is available
-    def capture(self, fen: str) -> list[str]:
+    def move_filters(self, fen: str) -> list[str]:
         board = chess.Board(fen)
         moves = list(board.legal_moves)
 
@@ -103,14 +117,23 @@ class TransformerPlayer(Player):
         checkmate_moves = []
         checkmate_opponent_moves = []
         
+        # loop trhough legal moves
         for move in moves:
+
+            # add all checkmate possibilities to list
             if self.checkmate_available(fen, move):
                 checkmate_moves.append(move.uci())
-            if not self.checkmate_opponent(fen, move.uci()):
-                checkmate_opponent_moves.append(move.uci())
-                if board.is_capture(move):
-                    if not self.attacked(fen, move.uci()):
-                        best_moves.append(move.uci())
+            
+            # add move to list when opponent can't do checkmate in next move and prevent drawing
+            if not self.checkmate_opponent(fen, move.uci()) and self.prevent_draw(fen, move):
+                    checkmate_opponent_moves.append(move.uci())
+
+                    # add most to list when safe capture or safe check is available
+                    if board.is_capture(move) or board.gives_check(move):
+                        if not self.attacked(fen, move.uci()):
+                            best_moves.append(move.uci())
+
+        # choose list in this order: checkmate > best move > safe move > all legal moves
         if len(checkmate_moves) > 0:
             return checkmate_moves
         if len(best_moves) > 0:
@@ -119,22 +142,23 @@ class TransformerPlayer(Player):
             return checkmate_opponent_moves
         return [move.uci() for move in moves]
     
-    # model chooses move with highest 
+    # model chooses move with highest regression score
     def choose_move(self, fen: str, moves: list[str]) -> str:
         self._load_model()
         board = chess.Board(fen)
         prompt = [f"FEN: {fen} Move: {move}" for move in moves]
         inputs = self.tokenizer(prompt, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.model.device)
 
+        # calculating logits
         with torch.no_grad():
             outputs = self.model(**inputs)
             scores = outputs.logits.squeeze(-1).tolist()
 
+        # if white to move > highest score, if black to move > lowest score
         if board.turn == chess.WHITE:
             best_move = np.argmax(scores)
         else:
             best_move = np.argmin(scores)
-        # best_idx = np.argmax(scores)
         return moves[best_move]
     
     # -------------------------
@@ -143,9 +167,11 @@ class TransformerPlayer(Player):
     
     def get_move(self, fen: str) -> Optional[str]:
         try:
-            capture_moves = self.capture(fen)
-            if capture_moves:
-                return self.choose_move(fen, capture_moves)
+            # choose move from list returned by move filters
+            move_filter = self.move_filters(fen)
+            if move_filter:
+                return self.choose_move(fen, move_filter)
         except Exception:
             pass
+        # if no move avalable return random move
         return self._random_legal(fen)
